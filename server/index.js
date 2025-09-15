@@ -22,7 +22,9 @@ const io = new Server(server, {
   cors: {
     origin: clientUrl, // 👈 Also use environment variable here
     methods: ["GET", "POST"]
-  }
+  },
+  path: "/api/socket.io" // 👈 Add this line
+
 });
 
 const PORT = 3001;

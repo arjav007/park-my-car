@@ -5,8 +5,11 @@ import io from 'socket.io-client';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 
-const socket = io(import.meta.env.VITE_API_URL);
+// In client/src/HomePage.jsx
 
+const socket = io(import.meta.env.VITE_API_URL, {
+  path: "/api/socket.io" // 👈 Add this path option
+});
 // --- Reusable Components (no changes needed) ---
 
 function BookingModal({ spot, onClose, onConfirm }) {
