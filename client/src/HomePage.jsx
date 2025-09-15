@@ -5,8 +5,7 @@ import io from 'socket.io-client';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 
-const socket = io('http://localhost:3001');
-
+const socket = io(import.meta.env.VITE_API_URL);
 // --- Reusable Components ---
 
 function BookingModal({ spot, onClose, onConfirm }) {
@@ -100,7 +99,7 @@ export default function HomePage({ session }) {
   };
 
   const handleBooking = async (duration_hours) => {
-    const promise = fetch(`http://localhost:3001/api/book-spot/${spotToBook.id}`, {
+    const promise = fetch(`${import.meta.env.VITE_API_URL}/api/book-spot/${spotToBook.id}`, {
       method: 'POST',
       headers: { 
         'Authorization': `Bearer ${session.access_token}`, 
