@@ -6,7 +6,8 @@ import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 
 const socket = io(import.meta.env.VITE_API_URL);
-// --- Reusable Components ---
+
+// --- Reusable Components (no changes needed) ---
 
 function BookingModal({ spot, onClose, onConfirm }) {
   const [duration, setDuration] = useState(1);
@@ -55,30 +56,33 @@ export default function HomePage({ session }) {
   const [error, setError] = useState(null);
   const [spotToBook, setSpotToBook] = useState(null);
   const [mapCenter, setMapCenter] = useState([19.0760, 72.8777]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // State for mobile sidebar
-  const activeMarkerRef = useRef(null); // Ref to close popup when modal opens
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const activeMarkerRef = useRef(null);
 
+  // Reusable function to fetch the latest spot data
+  const fetchSpots = async () => {
+    const { data, error } = await supabase.from('parking_spots').select('*').order('id');
+    if (error) {
+      setError("Could not fetch parking spots. Please try again later.");
+      console.error("Error fetching spots:", error);
+    } else if (data) {
+      setSpots(data);
+    }
+  };
+  
   useEffect(() => {
-    const fetchInitialSpots = async () => {
-      setLoading(true);
-      setError(null);
-      const { data, error } = await supabase.from('parking_spots').select('*').order('id');
-      
-      if (error) {
-        setError("Could not fetch parking spots. Please try again later.");
-        console.error("Error fetching spots:", error);
-      } else if (data) {
-        setSpots(data);
-      }
-      setLoading(false);
-    };
-    
-    fetchInitialSpots();
-    socket.on('spots-update', (updatedSpots) => setSpots(updatedSpots));
+    setLoading(true);
+    fetchSpots().finally(() => setLoading(false));
+
+    // Listen for real-time updates pushed from the server
+    socket.on('spots-update', (updatedSpots) => {
+      console.log('Received real-time update from server');
+      setSpots(updatedSpots);
+    });
+
     return () => socket.off('spots-update');
   }, []);
 
-  // Close the popup when the booking modal is opened
   useEffect(() => {
     if (spotToBook && activeMarkerRef.current) {
       activeMarkerRef.current.closePopup();
@@ -98,23 +102,36 @@ export default function HomePage({ session }) {
     );
   };
 
+  // --- Corrected handleBooking function ---
   const handleBooking = async (duration_hours) => {
-    const promise = fetch(`${import.meta.env.VITE_API_URL}/api/book-spot/${spotToBook.id}`, {
-      method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${session.access_token}`, 
-        'Content-Type': 'application/json' 
-      },
-      body: JSON.stringify({ duration_hours })
-    });
+    setSpotToBook(null); // Close the modal immediately
+    const bookingToast = toast.loading('Booking spot...');
 
-    toast.promise(promise, {
-      loading: 'Booking spot...',
-      success: 'Spot booked successfully!',
-      error: 'Booking failed. The spot may have been taken.',
-    });
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/book-spot/${spotToBook.id}`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${session.access_token}`, 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({ duration_hours })
+      });
 
-    setSpotToBook(null);
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        // This makes sure server-side errors are caught
+        throw new Error(result.message || 'Booking failed.');
+      }
+
+      toast.success('Spot booked successfully!', { id: bookingToast });
+      
+      // The crucial fix: Manually refetch data to guarantee the UI updates for the user who booked.
+      await fetchSpots();
+
+    } catch (err) {
+      toast.error(err.message || 'Booking failed. The spot may have been taken.', { id: bookingToast });
+    }
   };
   
   // --- Icon Definitions ---
