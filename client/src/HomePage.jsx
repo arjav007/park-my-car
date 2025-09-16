@@ -1,15 +1,11 @@
+// client/src/HomePage.jsx
+
 import { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import io from 'socket.io-client';
 import { supabase } from './supabaseClient';
 import toast from 'react-hot-toast';
 
-// In client/src/HomePage.jsx
-
-const socket = io(import.meta.env.VITE_API_URL, {
-  path: "/api/socket.io" // 👈 Add this path option
-});
 // --- Reusable Components (no changes needed) ---
 
 function BookingModal({ spot, onClose, onConfirm }) {
@@ -73,19 +69,32 @@ export default function HomePage({ session }) {
     }
   };
   
+  // This useEffect handles fetching data AND listening for real-time updates
   useEffect(() => {
     setLoading(true);
     fetchSpots().finally(() => setLoading(false));
 
-    // Listen for real-time updates pushed from the server
-    socket.on('spots-update', (updatedSpots) => {
-      console.log('Received real-time update from server');
-      setSpots(updatedSpots);
-    });
+    // ✅ ADDED: Subscribe to real-time database changes
+    const channel = supabase
+      .channel('parking-spots-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'parking_spots' },
+        (payload) => {
+          // When a change is received, refetch the data to update the UI
+          fetchSpots();
+        }
+      )
+      .subscribe();
 
-    return () => socket.off('spots-update');
-  }, []);
+    // Cleanup function to unsubscribe when the component unmounts
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []); // Note: The empty dependency array [] means this runs only once on mount.
 
+  // ✅ FIXED: This useEffect was previously nested incorrectly. It's now separate.
+  // This hook handles closing the marker popup when the booking modal is opened.
   useEffect(() => {
     if (spotToBook && activeMarkerRef.current) {
       activeMarkerRef.current.closePopup();
@@ -105,9 +114,8 @@ export default function HomePage({ session }) {
     );
   };
 
-  // --- Corrected handleBooking function ---
   const handleBooking = async (duration_hours) => {
-    setSpotToBook(null); // Close the modal immediately
+    setSpotToBook(null);
     const bookingToast = toast.loading('Booking spot...');
 
     try {
@@ -123,15 +131,13 @@ export default function HomePage({ session }) {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        // This makes sure server-side errors are caught
         throw new Error(result.message || 'Booking failed.');
       }
 
       toast.success('Spot booked successfully!', { id: bookingToast });
+      // Note: You don't strictly need the fetchSpots() call here anymore
+      // because the Supabase listener will catch the update, but it doesn't hurt.
       
-      // The crucial fix: Manually refetch data to guarantee the UI updates for the user who booked.
-      await fetchSpots();
-
     } catch (err) {
       toast.error(err.message || 'Booking failed. The spot may have been taken.', { id: bookingToast });
     }
@@ -183,7 +189,6 @@ export default function HomePage({ session }) {
       
       {/* --- Map Container --- */}
       <div className="flex-1 relative">
-        {/* --- Mobile Sidebar Toggle Button --- */}
         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden absolute top-4 left-4 z-[800] p-2 bg-white rounded-full shadow-lg text-gray-800">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
         </button>

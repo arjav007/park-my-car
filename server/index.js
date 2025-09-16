@@ -1,6 +1,5 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require("socket.io");
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config(); // Allows reading from .env file for local development
@@ -23,7 +22,6 @@ const io = new Server(server, {
     origin: clientUrl, // 👈 Also use environment variable here
     methods: ["GET", "POST"]
   },
-  path: "/api/socket.io" // 👈 Add this line
 
 });
 
@@ -105,12 +103,7 @@ app.post('/api/book-spot/:id', async (req, res) => {
 });
 
 
-io.on('connection', (socket) => {
-  console.log('A user connected');
-  socket.on('disconnect', () => {
-    console.log('User disconnected');
-  });
-});
+
 
 // --- Automated Spot Release Job ---
 // This function runs periodically to check for and free up expired bookings
