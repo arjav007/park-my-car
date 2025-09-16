@@ -8,6 +8,10 @@ import Navbar from './Navbar';
 import HomePage from './HomePage';
 import MyBookingsPage from './MyBookingsPage';
 
+
+// Triggering a new Vercel deployment
+
+
 function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
