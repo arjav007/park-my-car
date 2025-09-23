@@ -119,7 +119,7 @@ export default function HomePage({ session }) {
     const bookingToast = toast.loading('Booking spot...');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/book-spot/${spotToBook.id}`, {
+      const response = await fetch(`/api/book-spot/${spotToBook.id}`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${session.access_token}`, 
