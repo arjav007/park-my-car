@@ -3,9 +3,9 @@
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const serverless = require('serverless-http'); // <-- 1. IMPORT THIS
 
 // --- Supabase Setup (using Environment Variables) ---
-// Make sure these are set in your Vercel project settings
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -14,7 +14,7 @@ const app = express();
 app.use(express.json()); // Allows reading JSON from the request body
 
 // --- CORS Setup (using Environment Variable) ---
-const clientUrl = process.env.VITE_APP_URL; // Use your frontend URL variable
+const clientUrl = process.env.VITE_APP_URL; 
 app.use(cors({ origin: clientUrl }));
 
 // --- API Routes ---
@@ -84,12 +84,34 @@ app.post('/api/book-spot/:id', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to book spot.' });
   }
 
-  // ⛔ We removed io.emit(). The database update will automatically trigger
-  // the real-time listener on your frontend.
-
   res.json({ success: true, spot: updatedSpot });
 });
 
-// ✅ This is the crucial change for Vercel
-// Export the Express app instance to be used by Vercel's serverless runtime
-module.exports = app;
+// POST to book a spot by user ID
+app.post('/api/parkingspots/book-spot/:id', async (req, res) => {
+  const { id } = req.params;
+  const { userId } = req.body || {};
+
+  if (!id || !userId) {
+    return res.status(400).json({ success: false, message: 'Missing spot id or userId.' });
+  }
+
+  const { error } = await supabase
+    .from('parking_spots')
+    .update({
+      booked_by: userId,
+      status: 'Booked',
+    })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error booking spot:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+
+  return res.status(200).json({ success: true, message: 'Spot booked successfully.' });
+});
+
+// ✅ This is the crucial change for AWS Lambda
+// Wrap the Express app instance with the serverless-http handler
+module.exports.handler = serverless(app);
