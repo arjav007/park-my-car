@@ -193,12 +193,11 @@ export default function HomePage({ session }) {
     const bookingToastId = toast.loading('Booking spot...');
 
     try {
-      // ✅ CRITICAL FIX: Ensure VITE_API_URL does not create a double slash or an incorrect path.
-      // Assuming VITE_API_URL is the full base path ending with a slash (e.g., https://.../prod/).
-      // If VITE_API_URL is *not* set, this will fail.
+      // ✅ CRITICAL FIX: Ensure VITE_API_URL ends with a slash and the path starts without one.
       const baseUrl = import.meta.env.VITE_API_URL || '';
+      const baseApiUrl = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'; // Ensure base URL ends with '/'
       
-      const response = await fetch(`${baseUrl}api/book-spot/${spotToBook.id}`, {
+      const response = await fetch(`${baseApiUrl}api/book-spot/${spotToBook.id}`, {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${session.access_token}`, 
@@ -209,16 +208,15 @@ export default function HomePage({ session }) {
 
       // Handle non-200 responses (401, 404, 500)
       if (!response.ok) {
-        // Attempt to read the error message sent by the server
         let errorData = await response.text(); 
         
-        // If the server response is the Express 404 HTML page (as was causing the '<' token error)
+        // This helps catch the Express 404 handler sending HTML
         if (response.status === 404 && errorData.startsWith('<!DOCTYPE html>')) {
              throw new Error("404: API endpoint not found. Please check your AWS route configuration.");
         }
         
         try {
-            // Try parsing as JSON for the custom error message (e.g., 401 Unauthorized)
+            // Try parsing as JSON for the custom error message
             errorData = JSON.parse(errorData);
         } catch (e) {
             // If not JSON, use the raw status text
@@ -239,7 +237,7 @@ export default function HomePage({ session }) {
 
     } catch (err) {
       toast.error(err.message || 'Booking failed. Please check the console for details.', { id: bookingToastId });
-      console.error("Booking handler error:", err); // Log the full error
+      console.error("Booking handler error:", err);
     } finally {
       setIsBookingLoading(false);
     }
