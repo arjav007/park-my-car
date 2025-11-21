@@ -1,4 +1,4 @@
-// api/index.js
+// api/index.js (Full Corrected Code)
 
 const express = require('express');
 const cors = require('cors');
@@ -6,20 +6,25 @@ const { createClient } = require('@supabase/supabase-js');
 const serverless = require('serverless-http'); 
 
 // --- Supabase Setup (using Environment Variables) ---
-// NOTE: Use a Service Role Key for secure server-side operations
+// NOTE: Using the SERVICE_ROLE_KEY for server-side security
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY; 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+    }
+});
 
 const app = express();
-app.use(express.json()); // Allows reading JSON from the request body
+app.use(express.json()); 
 
 // --- CORS Setup ---
-// Use process.env.CORS_ORIGIN or fall back to a specific Vercel URL for security
+// The origin should be your frontend Vercel domain
 const allowedOrigin = process.env.CORS_ORIGIN || 'https://park-my-car.vercel.app';
 app.use(cors({ 
     origin: allowedOrigin,
-    methods: ['GET', 'POST', 'OPTIONS'], // Ensure OPTIONS is allowed for preflight
+    methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -39,13 +44,14 @@ app.get('/api/parking-spots', async (req, res) => {
   res.json(data);
 });
 
-// POST to book a spot
-// This route now uses the token for authentication (the secure method).
+
+// POST to book a spot - CONSOLIDATED AND CORRECTED ROUTE
+// This handler combines the two previous POST attempts into one secure, working route.
 app.post('/api/book-spot/:id', async (req, res) => {
   const spotId = parseInt(req.params.id, 10);
-  const { duration_hours } = req.body; // Duration is expected in the body
+  const { duration_hours } = req.body; 
 
-  // 1. Input Validation
+  // 1. INPUT VALIDATION
   if (isNaN(spotId)) {
     return res.status(400).json({ success: false, message: 'Invalid Spot ID format.' });
   }
@@ -53,7 +59,7 @@ app.post('/api/book-spot/:id', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid booking duration.' });
   }
 
-  // 2. Authentication (CRITICAL for security)
+  // 2. AUTHENTICATION (Verifies user is logged in)
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   
@@ -61,7 +67,7 @@ app.post('/api/book-spot/:id', async (req, res) => {
     return res.status(401).json({ success: false, message: 'Unauthorized: No token provided.' });
   }
 
-  // Use the service role key client to verify the user token
+  // Use service client to verify the user token
   const { data: { user }, error: userError } = await supabase.auth.getUser(token);
   
   if (userError || !user) {
@@ -69,7 +75,7 @@ app.post('/api/book-spot/:id', async (req, res) => {
     return res.status(401).json({ success: false, message: 'Unauthorized: Invalid or expired token.' });
   }
 
-  // 3. Check Spot Availability
+  // 3. CHECK SPOT & BOOKING LOGIC
   const { data: spot, error: fetchError } = await supabase
     .from('parking_spots')
     .select('*')
@@ -80,21 +86,19 @@ app.post('/api/book-spot/:id', async (req, res) => {
     return res.status(404).json({ success: false, message: 'Spot not found.' });
   }
 
+  // Check availability based on booked_until time
   if (spot.booked_until && new Date(spot.booked_until) > new Date()) {
-    // Spot is currently booked
     return res.status(400).json({ success: false, message: 'Spot is currently unavailable.' });
   }
   
-  // 4. Calculate Booking End Time
+  // 4. CALCULATE & UPDATE
   const bookedUntil = new Date(Date.now() + duration_hours * 60 * 60 * 1000);
 
-  // 5. Update Database
   const { data: updatedSpot, error: updateError } = await supabase
     .from('parking_spots')
     .update({ 
-      // Update logic based on your schema
       is_available: false, 
-      booked_by_user_id: user.id, // Use the ID from the validated token
+      booked_by_user_id: user.id, 
       booked_until: bookedUntil.toISOString()
     })
     .eq('id', spotId)
@@ -106,8 +110,15 @@ app.post('/api/book-spot/:id', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to book spot due to server error.' });
   }
 
+  // 5. SUCCESS RESPONSE
   res.json({ success: true, spot: updatedSpot });
 });
 
-// Final handler for serverless environment
+
+// Add a default Express 404 handler at the end of all routes
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: `Route not found for: ${req.method} ${req.originalUrl}` });
+});
+
+// Wrap the Express app instance with the serverless-http handler
 module.exports.handler = serverless(app);
